@@ -4,6 +4,7 @@ import sys
 
 import cluster_by_splice_site as cbss
 import filter_fastq as ff
+import run_poa as rp
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -12,13 +13,16 @@ if __name__ == '__main__':
     raw_filter_group.add_argument('-f', '--file', type=str, help='input file, fasta/fastq format')
     raw_filter_group.add_argument('-l', '--len', type=int, default=200, help='minimum read length [200]')
     raw_filter_group.add_argument('-q', '--quality_cutoff', type=int, default=9, help='minimum average phred-score, only if input file is fastq format [9]')
+
     gmap_group = parser.add_argument_group('Align with GMAP')
     gmap_group.add_argument('-b', '--gmap_bin_dir', type=str, help='bin folder of GMAP')
     gmap_group.add_argument('-D', '--gmap_genome_dir', type=str, help='GMAP genome directory')
     gmap_group.add_argument('-d', '--gmap_db', type=str, help='GMAP reference genome database')
     gmap_group.add_argument('-t', '--gmap_thread', default=1, type=int, help='number of threads to run GMAP [1]')
 
-
+    poa_group = parser.add_argument_group('Generating consensus with POA')
+    poa_group.add_argument('-p', '--poa_bin_dir', type=str, help='bin folder of POA')
+    poa_group.add_argument('-c', '--poa_cpus', type=int, default=1, help='number of processors used to run POA at one time')
 
     args = parser.parse_args()
 
@@ -64,4 +68,15 @@ if __name__ == '__main__':
     os.system('%s sort -@ %d %s > %s' % (samtools, gmap_thread, gmap_bam, gmap_sort_bam))
 
     # 4. sort bam record with splice site
+    full_isoform_list = ''
+    first_last_list = ''
+    first_or_last_list = ''
     cbss.clus_by_splice_site(gmap_sort_bam, '')
+
+    # 5. run POA for each cluster
+    if args.poa_bin_dir is Nono:
+        poa='poa'
+    else:
+        poa=args.poa_bin_dir+'/poa'
+    poa_cpus = args.poa_cpus
+    rp.run_poa(full_isoform_list, poa_cpus, '')
