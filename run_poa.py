@@ -1,2 +1,2 @@
-def run_poa(file_list, poa_cpus, output):
+def run_poa(poa, poa_cpus):
     return
