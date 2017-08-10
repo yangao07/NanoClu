@@ -3,6 +3,7 @@ import sys
 
 import gffutils as gu
 import pysam as ps
+
 import utils
 
 
@@ -31,7 +32,7 @@ def filter_rRNA(record, rRNA_db):
     return False
 
 
-def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate, best_rate, rRNA):
+def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate, best_rate, min_intron_len, intron_n, rRNA):
     in_fp = ps.AlignmentFile(in_sam, 'r')
     filtered_bam = in_sam + '.filter'
     filter_fp = ps.AlignmentFile(filtered_bam, 'wb', template=in_fp)
@@ -45,7 +46,7 @@ def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate,
                 sys.exit(IOError)
         else:
             try:
-                rRNA_db = gffutils.FeatureDB(rRNA_db_fn)
+                rRNA_db = gu.FeatureDB(rRNA_db_fn)
             except:
                 sys.stderr.write('Error in parsing %s\n' % (rRNA_db_fn))
                 sys.exit(IOError)
@@ -57,6 +58,10 @@ def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate,
     utils.format_time(__name__, 'Filtering alignments\n')
     for record in in_fp.fetch():
         if record.is_unmapped:
+            continue
+        # 0. intron number
+        N_n = [c for c in record.cigartuples if c[0] == 3 and c[1] >= min_intron_len]
+        if len(N_n) < intron_n:
             continue
         # 1. aligned bases
         if filter_align_rate(record, align_rate):
