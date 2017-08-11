@@ -7,19 +7,19 @@ import pysam as ps
 import utils
 
 
-def filter_fastq(infile, outfile, length, quality):
+def filter_fastq(logfp, infile, outfile, length, quality):
     try:
         fin = ps.FastxFile(infile)
     except:
-        sys.stderr.write('Error in parsing read file %s\n' % (infile))
+        logfp.write('Error in parsing read file %s\n' % (infile))
         sys.exit(IOError)
     try:
         fout = open(outfile, 'w')
     except:
-        sys.stderr.write('Error in opening output read file %s\n' % (outfile))
+        logfp.write('Error in opening output read file %s\n' % (outfile))
         sys.exit(IOError)
 
-    utils.format_time(__name__, 'Filtering reads\n')
+    utils.format_time(logfp, __name__, 'Filtering reads\n')
 
     cnt = 0
     for entry in fin:
@@ -34,7 +34,7 @@ def filter_fastq(infile, outfile, length, quality):
             else:
                 fout.write(str(entry) + '\n')
                 cnt += 1
-    utils.format_time(__name__, 'Filtered reads: %s\n' % cnt)
+    utils.format_time(logfp, __name__, 'Filtered reads: %s\n' % cnt)
 
     fin.close()
     fout.close()

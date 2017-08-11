@@ -32,7 +32,7 @@ def filter_rRNA(record, rRNA_db):
     return False
 
 
-def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate, best_rate, min_intron_len, intron_n, rRNA):
+def filter_bam(logfp, samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate, best_rate, min_intron_len, intron_n, rRNA):
     in_fp = ps.AlignmentFile(in_sam, 'r')
     filtered_bam = in_sam + '.filter'
     filter_fp = ps.AlignmentFile(filtered_bam, 'wb', template=in_fp)
@@ -42,20 +42,20 @@ def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate,
             try:
                 rRNA_db = gu.create_db(rRNA, rRNA_db_fn)
             except:
-                sys.stderr.write('Error in parsing %s\n' % (rRNA))
+                logfp.write('Error in parsing %s\n' % (rRNA))
                 sys.exit(IOError)
         else:
             try:
                 rRNA_db = gu.FeatureDB(rRNA_db_fn)
             except:
-                sys.stderr.write('Error in parsing %s\n' % (rRNA_db_fn))
+                logfp.write('Error in parsing %s\n' % (rRNA_db_fn))
                 sys.exit(IOError)
 
     last_qname = ''
     b_score = 0
     s_score = 0
     cnt = 0
-    utils.format_time(__name__, 'Filtering alignments\n')
+    utils.format_time(logfp, __name__, 'Filtering alignments\n')
     for record in in_fp.fetch():
         if record.is_unmapped:
             continue
@@ -97,8 +97,8 @@ def filter_bam(samtools, in_sam, filter_sort_bam, thread, align_rate, iden_rate,
     in_fp.close()
     filter_fp.close()
 
-    utils.format_time(__name__, 'Filtered alignments: ' + str(cnt) + '\n')
+    utils.format_time(logfp, __name__, 'Filtered alignments: ' + str(cnt) + '\n')
 
-    utils.exec_cmd(__name__, '%s sort -@ %d %s > %s' % (samtools, thread, filtered_bam, filter_sort_bam))
-    utils.exec_cmd(__name__, '%s index %s' % (samtools, filter_sort_bam))
-    utils.exec_cmd(__name__, 'rm %s' % filtered_bam)
+    utils.exec_cmd(logfp, __name__, '%s sort -@ %d %s > %s' % (samtools, thread, filtered_bam, filter_sort_bam))
+    utils.exec_cmd(logfp, __name__, '%s index %s' % (samtools, filter_sort_bam))
+    utils.exec_cmd(logfp, __name__, 'rm %s' % filtered_bam)

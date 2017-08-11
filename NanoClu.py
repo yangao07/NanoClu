@@ -52,23 +52,31 @@ def parse_argv(args):
     argv['splice_site_bin_dis'] = args.bin_dis
     argv['splice_site_bin_min_cnt'] = float(args.min_bin_cnt)
     argv['min_clu_size'] = float(args.min_clu_size)
-    argv['clu_folder'] = argv['output'] + '/clu_seq/'
+    argv['clu_folder'] = argv['output'] + '/clu_seq' + '_M' + str(argv['clu_mode']) + '_b' + str(
+        argv['splice_site_bin_min_cnt']) + '_c' + str(argv['min_clu_size']) + '/'
     # align consensus seq with GAMP
-    argv['cons'] = argv['output'] + '/' + 'M' + str(args.clu_mode) + '_cons.fa'
+    argv['cons'] = argv['output'] + '/' + 'M' + str(argv['clu_mode']) + '_b' + str(
+        argv['splice_site_bin_min_cnt']) + '_c' + str(argv['min_clu_size']) + '_cons.fa'
     argv['cons_sam'] = argv['cons'] + '.gmap.sam'
     argv['cons_log'] = argv['cons'] + '.gmap.log'
     # update gtf
     argv['out_gtf'] = args.update_gtf
+    # log
+    argv['log'] = argv['output'] + '/' + 'M' + str(argv['clu_mode']) + '_b' + str(
+        argv['splice_site_bin_min_cnt']) + '_c' + str(argv['min_clu_size']) + '.log'
+    argv['logfp'] = open(argv['log'], 'w')
     return argv
 
 
 def filter_read(argv):
-    ff.filter_fastq(argv['in_fq'], argv['filter_fq'], argv['length'], argv['quality'])
+    logfp = argv['logfp']
+    ff.filter_fastq(logfp, argv['in_fq'], argv['filter_fq'], argv['length'], argv['quality'])
 
 
 def align_filtered_reads_with_gmap(argv):
     min_intron_len = 25
-    utils.exec_cmd('align_with_gamp', '%s %s -d %s -t %d --min-intronlength %d -f samse -O %s > %s 2> %s' %
+    logfp = argv['logfp']
+    utils.exec_cmd(logfp, 'align_with_gamp', '%s %s -d %s -t %d --min-intronlength %d -f samse -O %s > %s 2> %s' %
                    (argv['gmap_bin'], argv['gmap_D'], argv['gmap_db'], argv['gmap_thread'],
                     min_intron_len, argv['filter_fq'], argv['gmap_sam'], argv['gmap_log']))
 
@@ -84,8 +92,9 @@ def filter_bam(argv):
     gmap_thread = argv['gmap_thread']
     intron_N = 1  # filter out non-spliced reads
     min_intron_len = 25
+    logfp = argv['logfp']
 
-    fb.filter_bam(samtools, gmap_sam, gmap_filter_sort_bam, gmap_thread, align_rate, match_rate,
+    fb.filter_bam(logfp, samtools, gmap_sam, gmap_filter_sort_bam, gmap_thread, align_rate, match_rate,
                   best_rate, min_intron_len, intron_N, rRNA)
 
 
@@ -100,7 +109,9 @@ def gen_cluster(argv):
     min_clu_size = argv['min_clu_size']
     clu_folder = argv['clu_folder']
     thread_n = argv['gmap_thread']
-    cbss.clu_by_splice_site(gtf, clu_mode, min_intron, bin_site_size, bin_site_dis, min_bin_cnt, min_clu_size,
+    logfp = argv['logfp']
+
+    cbss.clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_site_size, bin_site_dis, min_bin_cnt, min_clu_size,
                             gmap_filter_sort_bam, clu_folder, thread_n)
 
 
@@ -109,7 +120,9 @@ def gen_cons_with_poa(argv):
     thread_n = argv['gmap_thread']
     clu_folder = argv['clu_folder']
     cons = argv['cons']
-    rp.run_poa(poa, thread_n, clu_folder, cons)
+    logfp = argv['logfp']
+
+    rp.run_poa(logfp, poa, thread_n, clu_folder, cons)
 
 
 def align_cons_with_gmap(argv):
@@ -117,7 +130,9 @@ def align_cons_with_gmap(argv):
     cons = argv['cons']
     cons_sam = argv['cons_sam']
     cons_log = argv['cons_log']
-    utils.exec_cmd('align_with_gamp', '%s %s -d %s -t %d --min-intronlength %d -f samse -O %s > %s 2> %s' %
+    logfp = argv['logfp']
+
+    utils.exec_cmd(logfp, 'align_with_gamp', '%s %s -d %s -t %d --min-intronlength %d -f samse -O %s > %s 2> %s' %
                    (argv['gmap_bin'], argv['gmap_D'], argv['gmap_db'], argv['gmap_thread'],
                     min_intron_len, cons, cons_sam, cons_log))
 
@@ -127,7 +142,9 @@ def update_gtf(argv):
     cons_sam = argv['cons_sam']
     rRNA = argv['rRNA']
     out_gtf = argv['out_gtf']
-    ug.update_gtf(cons_sam, rRNA, old_gtf, out_gtf)
+    logfp = argv['logfp']
+
+    ug.update_gtf(logfp, cons_sam, rRNA, old_gtf, out_gtf)
 
 
 if __name__ == '__main__':
@@ -193,15 +210,15 @@ if __name__ == '__main__':
     argv = parse_argv(args)
 
     # 1. filter fastq based on length and phred-score
-    # filter_read(argv)
+    filter_read(argv)
 
     # 2. pesudo-align with nanoclu
     # pseudo_align_with_nanoclu(argv)
     # 2. align filtered reads with GMAP
-    # align_filtered_reads_with_gmap(argv)
+    align_filtered_reads_with_gmap(argv)
 
     # 3. filter GMAP alignment
-    # filter_bam(argv)  # TODO: filter with 1.best/secondary, 2.aligned ratio, 3. identical bases ratio
+    filter_bam(argv)  # filter with 1.best/secondary, 2.aligned ratio, 3. identical bases ratio
 
     # 4. sort bam record with splice site
     gen_cluster(argv)  # TODO: merge splice site into bins

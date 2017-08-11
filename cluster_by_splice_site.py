@@ -440,7 +440,6 @@ def write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_di
                     str(np.mean(site_bin[0])) + '_' + str(np.mean(site_bin[1]))
             fa_fp = open(fa_fn, 'w')
 
-            print seq
             for i, s in enumerate(seq):
                 fa_fp.write('>' + os.path.basename(fa_fn) + '_' + str(i) + '\n')
                 fa_fp.write(s + '\n')
@@ -560,7 +559,7 @@ def clu_thread(id, bam_bundle_list_n, bam_bundle_list, bam_bundle_rname, bam_bun
     return
 
 
-def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt, min_clu_size, in_bam, clu_folder,
+def clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt, min_clu_size, in_bam, clu_folder,
                        thread_n):
     global CLU_THREAD_I
     global CLU_THREAD_LK
@@ -573,16 +572,16 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
             try:
                 gtf_db = gu.create_db(gtf, gtf_db_fn)
             except:
-                sys.stderr.write('Error in parsing %s\n' % gtf)
+                logfp.write('Error in parsing %s\n' % gtf)
                 sys.exit(IOError)
         else:
             try:
                 gtf_db = gu.FeatureDB(gtf_db_fn)
             except:
-                sys.stderr.write('Error in parsing %s\n' % gtf_db_fn)
+                logfp.write('Error in parsing %s\n' % gtf_db_fn)
                 sys.exit(IOError)
 
-    utils.format_time(__name__, 'Clustering alignments ... \n')
+    utils.format_time(logfp, __name__, 'Clustering alignments ... \n')
 
     bam_iter = filter_bam_fp.fetch()
 
@@ -600,7 +599,10 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
     clu_seq_n = 0
 
     if not os.path.isdir(clu_folder):
-        utils.exec_cmd('gen_clu_seq', 'mkdir %s 2> /dev/null' % clu_folder)
+        utils.exec_cmd(logfp, 'gen_clu_seq', 'mkdir %s 2> /dev/null' % clu_folder)
+    else:
+        utils.exec_cmd(logfp, 'gen_clu_seq', 'rm %s/* -rf 2> /dev/null' % clu_folder)
+
     for record in bam_iter:
         # separate bam bundle if cur_start - last_end > thd
         if last_record and (record.reference_id != last_record.reference_id
@@ -612,7 +614,7 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
 
             if bam_bundle_list_n == bam_bundle_chunk:
                 if not os.path.isdir(clu_folder + '/' + str(clu_n / 1000)):
-                    utils.exec_cmd('gen_clu_seq', 'mkdir %s/%d 2> /dev/null' % (clu_folder, clu_n / 1000))
+                    utils.exec_cmd(logfp, 'gen_clu_seq', 'mkdir %s/%d 2> /dev/null' % (clu_folder, clu_n / 1000))
                 base_dir = clu_folder + '/' + str(clu_n / 1000)
 
                 bam_bundle_clu_out = [(0, 0)] * bam_bundle_list_n
@@ -631,6 +633,7 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
                 clu_seq_n += sum(second for first, second in bam_bundle_clu_out)
 
                 bam_bundle_list = []
+                bam_bundle_rname = []
                 bam_bundle_list_n = 0
 
             bam_bundle = []
@@ -643,7 +646,7 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
     bam_bundle_rname.append(last_record.reference_name)
     bam_bundle_list_n += 1
     if not os.path.isdir(clu_folder + '/' + str(clu_n / 1000)):
-        utils.exec_cmd('gen_clu_seq', 'mkdir %s/%d 2> /dev/null' % (clu_folder, clu_n / 1000))
+        utils.exec_cmd(logfp, 'gen_clu_seq', 'mkdir %s/%d 2> /dev/null' % (clu_folder, clu_n / 1000))
     base_dir = clu_folder + '/' + str(clu_n / 1000)
 
     bam_bundle_clu_out = [(0, 0)] * bam_bundle_list_n
@@ -661,6 +664,6 @@ def clu_by_splice_site(gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt
     clu_n += sum(first for first, second in bam_bundle_clu_out)
     clu_seq_n += sum(second for first, second in bam_bundle_clu_out)
 
-    utils.format_time(__name__, 'Read clutsers: %d %d\n' % (clu_n, clu_seq_n))
+    utils.format_time(logfp, __name__, 'Read clutsers: %d %d\n' % (clu_n, clu_seq_n))
     filter_bam_fp.close()
     return
