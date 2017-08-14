@@ -29,7 +29,7 @@ def parse_argv(args):
     else:
         argv['gmap_D'] = '-D ' + args.gmap_genome_dir
     argv['gmap_db'] = args.gmap_db
-    argv['min_intron'] = args.min_intron
+    argv['min_intron_len'] = args.min_intron_len
     argv['gmap_thread'] = args.gmap_thread
     argv['gmap_sam'] = argv['filter_fq'] + '.gmap.sam'
     argv['gmap_log'] = argv['filter_fq'] + '.gmap.log'
@@ -74,7 +74,7 @@ def filter_read(argv):
 
 
 def align_filtered_reads_with_gmap(argv):
-    min_intron_len = 25
+    min_intron_len = argv['min_intron_len']
     logfp = argv['logfp']
     utils.exec_cmd(logfp, 'align_with_gamp', '%s %s -d %s -t %d --min-intronlength %d -f samse -O %s > %s 2> %s' %
                    (argv['gmap_bin'], argv['gmap_D'], argv['gmap_db'], argv['gmap_thread'],
@@ -91,7 +91,7 @@ def filter_bam(argv):
     gmap_filter_sort_bam = argv['gmap_filter_sort_bam']
     gmap_thread = argv['gmap_thread']
     intron_N = 1  # filter out non-spliced reads
-    min_intron_len = 25
+    min_intron_len = argv['min_intron_len']
     logfp = argv['logfp']
 
     fb.filter_bam(logfp, samtools, gmap_sam, gmap_filter_sort_bam, gmap_thread, align_rate, match_rate,
@@ -100,7 +100,7 @@ def filter_bam(argv):
 
 def gen_cluster(argv):
     gtf = argv['gtf']
-    min_intron = argv['min_intron']
+    min_intron_len = argv['min_intron_len']
     gmap_filter_sort_bam = argv['gmap_filter_sort_bam']
     clu_mode = argv['clu_mode']
     bin_site_dis = argv['splice_site_bin_dis']
@@ -111,7 +111,7 @@ def gen_cluster(argv):
     thread_n = argv['gmap_thread']
     logfp = argv['logfp']
 
-    cbss.clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_site_size, bin_site_dis, min_bin_cnt, min_clu_size,
+    cbss.clu_by_splice_site(logfp, gtf, clu_mode, min_intron_len, bin_site_size, bin_site_dis, min_bin_cnt, min_clu_size,
                             gmap_filter_sort_bam, clu_folder, thread_n)
 
 
@@ -120,13 +120,14 @@ def gen_cons_with_poa(argv):
     thread_n = argv['gmap_thread']
     clu_folder = argv['clu_folder']
     cons = argv['cons']
+    clu_mode = argv['clu_mode']
     logfp = argv['logfp']
 
-    rp.run_poa(logfp, poa, thread_n, clu_folder, cons)
+    rp.run_poa(logfp, poa, thread_n, clu_mode, clu_folder, cons)
 
 
 def align_cons_with_gmap(argv):
-    min_intron_len = 25
+    min_intron_len = argv['min_intron_len']
     cons = argv['cons']
     cons_sam = argv['cons_sam']
     cons_log = argv['cons_log']
@@ -173,7 +174,7 @@ if __name__ == '__main__':
                             help='path of GMAP [gmap]')
     gmap_group.add_argument('-D', '--gmap-genome-dir', type=str, help='GMAP genome directory')
     gmap_group.add_argument('-d', '--gmap-db', type=str, required=True, help='GMAP reference genome database')
-    gmap_group.add_argument('-i', '--min-intron', type=int, default=25, help='minimum intron length [25]')
+    gmap_group.add_argument('-i', '--min-intron-len', type=int, default=25, help='minimum intron length [25]')
     gmap_group.add_argument('-t', '--gmap-thread', type=int, default=1,
                             help='number of threads to run GMAP [1]')
 
@@ -182,8 +183,8 @@ if __name__ == '__main__':
     poa_group.add_argument('--samtools', type=str, default='samtools', help='path of samtools [samtools]')
     poa_group.add_argument('-G', '--gtf', type=str, help='use annotation file to guide generating consensus sequence')
     poa_group.add_argument('-M', '--clu-mode', type=int, default=0, help='specify strategy to cluster reads [0]. ' +
-                                                                         '(0): first and last splice site; ' +
-                                                                         '(1): first or last splice site; ' +
+                                                                         '(0): share at least one splice site; ' +
+                                                                         '(1): first and last splice site; ' +
                                                                          '(2): start and end site; ' +
                                                                          '(3): start or end site; ' +
                                                                          '(4): all internal splice site; ' +
@@ -194,8 +195,8 @@ if __name__ == '__main__':
                            help='minimum distance of two adjacent splice site bins [30]')
     poa_group.add_argument('--min-bin-cnt', type=str, default='2',
                            help='minimum number or fraction of splice sites to retain the site bin [2]')
-    poa_group.add_argument('--min-clu-size', type=str, default='0.02',
-                           help='minimum number or fraction of cluster reads to retain the read cluster [0.02]')
+    poa_group.add_argument('--min-clu-size', type=str, default='5',
+                           help='minimum number or fraction of cluster reads to retain the read cluster [5]')
 
     gtf_group = parser.add_argument_group('Update gtf with consensus alignment')
     gtf_group.add_argument('-u', '--update-gtf', type=str, required=True, help='updated gtf file')
@@ -221,7 +222,7 @@ if __name__ == '__main__':
     filter_bam(argv)  # filter with 1.best/secondary, 2.aligned ratio, 3. identical bases ratio
 
     # 4. sort bam record with splice site
-    gen_cluster(argv)  # TODO: merge splice site into bins
+    gen_cluster(argv)
 
     # 5. generate consensus with poa
     gen_cons_with_poa(argv)

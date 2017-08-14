@@ -54,8 +54,8 @@ def get_op_length(cigartuples):
 
 
 # return: 1-base, exonic base position
-def cigar_to_splice_site(ref_start, cigar, min_intron):  # ref_start: 1-base
-    N_idx = [(i, item[1]) for i, item in enumerate(cigar) if item[0] == 3 and item[1] >= min_intron]  # 'N':3
+def cigar_to_splice_site(ref_start, cigar, min_intron_len):  # ref_start: 1-base
+    N_idx = [(i, item[1]) for i, item in enumerate(cigar) if item[0] == 3 and item[1] >= min_intron_len]  # 'N':3
     if len(N_idx) > 0:
         five_site = []
         three_site = []
@@ -142,7 +142,7 @@ def splice_site_bin_DP(site, bin_size, bin_dis):
     return solu_avg, solu_bin
 
 
-def get_max_bin(site, bin_size, bam_bundle_read_cnt, min_cnt):
+def get_max_bin(site, bin_size, min_cnt):
     max_bin = (-1, -1)
     max_idx = (-1, -1)
     max_bin_std = float('inf')
@@ -163,8 +163,7 @@ def get_max_bin(site, bin_size, bam_bundle_read_cnt, min_cnt):
             max_idx = (start_i, _end_i)
             max_bin_std = bin_std
 
-    if (min_cnt < 1 and max_bin_cnt >= bam_bundle_read_cnt * min_cnt) \
-            or max_bin_cnt >= min_cnt >= 1:
+    if max_bin_cnt >= min_cnt:
         return max_bin, max_idx, max_bin_cnt
     else:
         return [], [], 0
@@ -181,12 +180,12 @@ def check_bin_dis(site_bin, max_bin, bin_dis):
 
 
 # greedily find bin with most sites/second most sites/ ..., until reach min_cnt threshold
-def splice_site_bin_greedy(site, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt):
+def splice_site_bin_greedy(site, bin_size, bin_dis, min_cnt):
     if not site:
         return []
     site_bin = []
     while site:
-        max_bin, max_idx, max_bin_size = get_max_bin(site, bin_size, bam_bundle_read_cnt, min_cnt)
+        max_bin, max_idx, max_bin_size = get_max_bin(site, bin_size, min_cnt)
         if not max_bin:
             break
         if check_bin_dis(site_bin, max_bin, bin_dis):
@@ -219,7 +218,7 @@ def gen_se_site_from_gtf(gtf_db, rname, min_site, max_site):
 # bin_size: with gtf: [bin_size--,anno_site,--bin_size]; without gtf: [bin_size]
 # bin_dis:  [site bin]--bin_dis--[site bin]
 # min_cnt:  size of [site bin] >= min_cnt
-def infer_splice_site(gtf_db, rname, five_ss, three_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt):
+def infer_splice_site(gtf_db, rname, five_ss, three_ss, bin_size, bin_dis, min_cnt):
     five_site_bin = []  # (start, end) : count
     three_site_bin = []
     novel_five_ss = []
@@ -246,17 +245,17 @@ def infer_splice_site(gtf_db, rname, five_ss, three_ss, bin_size, bin_dis, bam_b
                 three_site_bin.append((anno_three_s - bin_size, anno_three_s + bin_size))
             elif abs(anno_three_s - three_s) > bin_dis:
                 novel_three_ss.append(three_s)
-        five_site_bin.extend(splice_site_bin_greedy(novel_five_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt))
-        three_site_bin.extend(splice_site_bin_greedy(novel_three_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt))
+        five_site_bin.extend(splice_site_bin_greedy(novel_five_ss, bin_size, bin_dis, min_cnt))
+        three_site_bin.extend(splice_site_bin_greedy(novel_three_ss, bin_size, bin_dis, min_cnt))
     else:
         # unsupervised clustering
-        five_site_bin = splice_site_bin_greedy(five_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt)
-        three_site_bin = splice_site_bin_greedy(three_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt)
+        five_site_bin = splice_site_bin_greedy(five_ss, bin_size, bin_dis, min_cnt)
+        three_site_bin = splice_site_bin_greedy(three_ss, bin_size, bin_dis, min_cnt)
 
     return five_site_bin, three_site_bin
 
 
-def infer_start_end_site(gtf_db, rname, start_ss, end_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt):
+def infer_start_end_site(gtf_db, rname, start_ss, end_ss, bin_size, bin_dis, min_cnt):
     start_site_bin = []
     end_site_bin = []
     novel_start_ss = []
@@ -284,28 +283,28 @@ def infer_start_end_site(gtf_db, rname, start_ss, end_ss, bin_size, bin_dis, bam
                 end_site_bin.append((anno_end_s - bin_size, anno_end_s + bin_size))
             elif abs(anno_end_s - end_s) > bin_dis:
                 novel_end_ss.append(end_s)
-        start_site_bin.extend(splice_site_bin_greedy(novel_start_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt))
-        end_site_bin.extend(splice_site_bin_greedy(novel_end_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt))
+        start_site_bin.extend(splice_site_bin_greedy(novel_start_ss, bin_size, bin_dis, min_cnt))
+        end_site_bin.extend(splice_site_bin_greedy(novel_end_ss, bin_size, bin_dis, min_cnt))
     else:
         # unsupervised clustering
-        start_site_bin = splice_site_bin_greedy(start_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt)
-        end_site_bin = splice_site_bin_greedy(end_ss, bin_size, bin_dis, bam_bundle_read_cnt, min_cnt)
+        start_site_bin = splice_site_bin_greedy(start_ss, bin_size, bin_dis, min_cnt)
+        end_site_bin = splice_site_bin_greedy(end_ss, bin_size, bin_dis, min_cnt)
 
     return start_site_bin, end_site_bin
 
 
 def infer_site_bin(gtf_db, rname, start_ss, end_ss, five_ss, three_ss,
-                   bin_size, bin_dis, bam_bundle_read_cnt, bin_min_cnt):
+                   bin_size, bin_dis, min_bin_cnt):
     (start_site_bin, end_site_bin) = ([], [])
     (five_site_bin, three_site_bin) = ([], [])
 
     if len(start_ss) > 0:
         start_site_bin, end_site_bin = infer_start_end_site(gtf_db, rname, start_ss, end_ss, bin_size, bin_dis,
-                                                            bam_bundle_read_cnt, bin_min_cnt)
+                                                            min_bin_cnt)
 
     if len(five_ss) > 0:
         five_site_bin, three_site_bin = infer_splice_site(gtf_db, rname, five_ss, three_ss, bin_size, bin_dis,
-                                                          bam_bundle_read_cnt, bin_min_cnt)
+                                                          min_bin_cnt)
     return start_site_bin, end_site_bin, five_site_bin, three_site_bin
 
 
@@ -430,12 +429,11 @@ def assign_se_sp_site_bin(site_seq, start_site_bin, end_site_bin, five_site_bin,
     return bin_seq_set
 
 
-def write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_dir):
+def write_clu_seq(bin_seq_set, min_clu_size, rname, base_dir):
     clu_n = 0
     clu_seq_n = 0
     for site_bin, seq in bin_seq_set.items():
-        if (min_clu_size < 1 and len(seq) > bam_bundle_read_cnt * min_clu_size) or \
-                                len(seq) >= min_clu_size >= 1:
+        if len(seq) >= min_clu_size:
             fa_fn = base_dir + '/' + rname + '_' + \
                     str(np.mean(site_bin[0])) + '_' + str(np.mean(site_bin[1]))
             fa_fp = open(fa_fn, 'w')
@@ -449,26 +447,26 @@ def write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_di
     return clu_n, clu_seq_n
 
 
-def gen_clu_seq(clu_mode, bam_bundle_read_cnt, min_clu_size, rname, base_dir, site_seq, start_site_bin, end_site_bin,
+def gen_clu_seq(clu_mode, min_clu_size, rname, base_dir, site_seq, start_site_bin, end_site_bin,
                 five_site_bin, three_site_bin):
     # 1. assign each record's first/last splice site with five_site_bin/three_site_bin
-    if clu_mode == 0 or clu_mode == 1:  # first and end
+    if clu_mode == 1:  # first and end
         # (frist_bin, last_bin) : [seq]
         bin_seq_set = assign_first_last_site_bin(site_seq, five_site_bin, three_site_bin)
-        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_dir)
+        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, min_clu_size, rname, base_dir)
     elif clu_mode == 2 or clu_mode == 3:
         # (start_bin, end_bin) : [seq]
         bin_seq_set = assign_se_site_bin(site_seq, start_site_bin, end_site_bin)
-        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_dir)
+        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, min_clu_size, rname, base_dir)
     elif clu_mode == 4:
         # ([],[]) : [seq]
         bin_seq_set = assign_splice_site_bin(site_seq, five_site_bin, three_site_bin)
-        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_dir)
+        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, min_clu_size, rname, base_dir)
     elif clu_mode == 5:
         # ((start_bin, end_bin), ([], [])) : [seq]
         bin_seq_set = assign_se_sp_site_bin(site_seq, start_site_bin, end_site_bin, five_site_bin,
                                             three_site_bin)
-        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, bam_bundle_read_cnt, min_clu_size, rname, base_dir)
+        clu_n, clu_seq_n = write_clu_seq(bin_seq_set, min_clu_size, rname, base_dir)
     else:
         sys.stderr.write('Unknown clu-mode: %d\n' % clu_mode)
         sys.exit(1)
@@ -476,68 +474,155 @@ def gen_clu_seq(clu_mode, bam_bundle_read_cnt, min_clu_size, rname, base_dir, si
     return clu_n, clu_seq_n
 
 
+def infer_cluster(shared_site_seq, min_clu_size):
+    cluster_site_seq = {}
+    last_site_seq = []
+    seq = []
+    clu_n = 0
+    clu_seq_n = 0
+    for i, site_seq in enumerate(shared_site_seq):
+        if len(last_site_seq) != 0 and len(set(site_seq[:-1]).intersection(set(last_site_seq[:-1]))) < 1:
+            if len(seq) >= min_clu_size:
+                cluster_site_seq[str(last_site_seq[0])] = seq
+                clu_n += 1
+            seq = []
+
+        seq.append(site_seq[-1])
+        clu_seq_n += 1
+        last_site_seq = site_seq
+    if len(seq) >= min_clu_size:
+        cluster_site_seq[str(last_site_seq[0])] = seq
+        clu_n += 1
+
+    return cluster_site_seq, clu_n, clu_seq_n
+
+
+def write_clu_seq_with_shared_site(rname, base_dir, shared_site_seq):
+    for name, seq in shared_site_seq.items():
+        fa_fn = base_dir + '/' + rname + '_' + name
+        fa_fp = open(fa_fn, 'w')
+
+        for i, s in enumerate(seq):
+            fa_fp.write('>' + os.path.basename(fa_fn) + '_' + str(i) + '\n')
+            fa_fp.write(s + '\n')
+        fa_fp.close()
+    return
+
+
 # for each bam bundle:
 # 1. infer splice site
 # 2. assign each record's (first/last) splice site with a inferred splice-site bin(20 bp)
 # 3. cluster by first 5' and last 3' splice site TODO: use different criteria to cluster read
-def clu_by_splice_site_core(gtf_db, clu_mode, min_intron, bin_size, bin_dis, bin_min_cnt, min_clu_size, bam_bundle,
+# 4. TODO: keep or discard clipping sequence
+def clu_by_splice_site_core(gtf_db, clu_mode, min_intron_len, bin_size, bin_dis, min_bin_cnt, min_clu_size, bam_bundle,
                             rname, base_dir):
     if not bam_bundle:
         return
-    # 0. generate splice site from bam record
-    start_site_set = []
-    end_site_set = []
-    five_site_set = []
-    three_site_set = []
-
-    site_seq = {}
     bam_bundle_read_cnt = 0
+    # 0. generate splice site from bam record
+    if clu_mode == 0:  # default mode
+        five_site_set = cl.Counter()
+        three_site_set = cl.Counter()
+        site_seq = []
+        shared_site_seq = []
+        for record in bam_bundle:
+            bam_bundle_read_cnt += 1
+            query_seq = record.query_sequence[record.query_alignment_start:record.query_alignment_end]
+            ref_start = record.reference_start + 1  # 1-bae exonic base
+            # ref_end = record.reference_end + 1  # 1-base exonic base
+            cigar = record.cigartuples
 
-    for record in bam_bundle:
-        bam_bundle_read_cnt += 1
-        query_seq = record.query_sequence[record.query_alignment_start:record.query_alignment_end]
-        ref_start = record.reference_start + 1  # 1-bae exonic base
-        ref_end = record.reference_end + 1  # 1-base exonic base
-        cigar = record.cigartuples
+            (five_site, three_site) = cigar_to_splice_site(ref_start, cigar, min_intron_len)
 
-        # record => bin_seq = {((start, end), (five_site), (three_site)) : query_seq}
-        (start, end) = (ref_start, ref_end)
-        five_site = []
-        three_site = []
+            site = []
+            for five, three in zip(five_site, three_site):
+                five_site_set[five] += 1
+                three_site_set[three] += 1
+                site.append(five)
+                site.append(three)
+            site.append(query_seq)
+            site_seq.append(tuple(site))
+
+        # TODO: annotation splice site min cnt
+        if min_bin_cnt < 1:
+            min_bin_cnt = bam_bundle_read_cnt * min_bin_cnt
+        if min_clu_size < 1:
+            min_clu_size = bam_bundle_read_cnt * min_clu_size
+
+        shared_five_site = [five for five in five_site_set if five_site_set[five] >= min_bin_cnt]
+        shared_three_site = [three for three in three_site_set if three_site_set[three] >= min_bin_cnt]
+
+        for ss in site_seq:
+            shared_site = []
+            for i, site in enumerate(ss[:-1]):
+                if i % 2 == 0 and site in shared_five_site:
+                    shared_site.append(site)
+                elif i % 2 != 0 and site in shared_three_site:
+                    shared_site.append(site)
+            if len(shared_site) > 0:
+                shared_site.append(ss[-1])
+                shared_site_seq.append(tuple(shared_site))
+
+        # [shared_site, shared_site, ..., seq]
+        shared_site_seq.sort()
+        # cluster into clusters
+        cluster_site_seq, clu_n, clu_seq_n = infer_cluster(shared_site_seq, min_clu_size)
+        # write cluster seq
+        write_clu_seq_with_shared_site(rname, base_dir, cluster_site_seq)
+    else:
+        start_site_set = []
+        end_site_set = []
+        five_site_set = []
+        three_site_set = []
         site_seq = {}
-        # XXX: ignore strand or XS
-        # start/end site
-        if clu_mode == 2 or clu_mode == 3 or clu_mode == 5:
-            start_site_set.append(ref_start)
-            end_site_set.append(ref_end)
+        for record in bam_bundle:
+            bam_bundle_read_cnt += 1
+            query_seq = record.query_sequence[record.query_alignment_start:record.query_alignment_end]
+            ref_start = record.reference_start + 1  # 1-bae exonic base
+            ref_end = record.reference_end + 1  # 1-base exonic base
+            cigar = record.cigartuples
 
-        # internal splice site, five_site, three_site: 1-base exonic position
-        if clu_mode == 0 or clu_mode == 1 or clu_mode == 4 or clu_mode == 5:
-            (five_site, three_site) = cigar_to_splice_site(ref_start, cigar, min_intron)
-            five_site_set.extend(five_site)
-            three_site_set.extend(three_site)
+            # record => bin_seq = {((start, end), (five_site), (three_site)) : query_seq}
+            (start, end) = (ref_start, ref_end)
+            five_site = []
+            three_site = []
+            # XXX: use strand or XS of most clustered read to represent strand of clustered sequences
+            # start/end site
+            if clu_mode == 2 or clu_mode == 3 or clu_mode == 5:
+                start_site_set.append(ref_start)
+                end_site_set.append(ref_end)
 
-        if ((start, end), tuple(five_site), tuple(three_site)) in site_seq:
-            site_seq[((start, end), tuple(five_site), tuple(three_site))].extend(query_seq)
-        else:
-            site_seq[((start, end), tuple(five_site), tuple(three_site))] = [query_seq]
+            # internal splice site, five_site, three_site: 1-base exonic position
+            if clu_mode == 0 or clu_mode == 1 or clu_mode == 4 or clu_mode == 5:
+                (five_site, three_site) = cigar_to_splice_site(ref_start, cigar, min_intron_len)
+                five_site_set.extend(five_site)
+                three_site_set.extend(three_site)
 
-    # 1. generate TSS/TES/splice site bin with/without annotation
-    start_site_bin, end_site_bin, five_site_bin, three_site_bin = \
-        infer_site_bin(gtf_db, rname, start_site_set, end_site_set,
-                       five_site_set, three_site_set, bin_size,
-                       bin_dis, bam_bundle_read_cnt, bin_min_cnt)
+            if ((start, end), tuple(five_site), tuple(three_site)) in site_seq:
+                site_seq[((start, end), tuple(five_site), tuple(three_site))].extend(query_seq)
+            else:
+                site_seq[((start, end), tuple(five_site), tuple(three_site))] = [query_seq]
 
-    # 2. generate clusters
-    clu_n, clu_seq_n = gen_clu_seq(clu_mode, bam_bundle_read_cnt, min_clu_size, rname, base_dir, site_seq,
-                                   start_site_bin, end_site_bin,
-                                   five_site_bin, three_site_bin)
+        if min_bin_cnt < 1:
+            min_bin_cnt = bam_bundle_read_cnt * min_bin_cnt
+        if min_clu_size < 1:
+            min_clu_size = bam_bundle_read_cnt * min_clu_size
+        # 1. generate TSS/TES/splice site bin with/without annotation
+        start_site_bin, end_site_bin, five_site_bin, three_site_bin = \
+            infer_site_bin(gtf_db, rname, start_site_set, end_site_set,
+                           five_site_set, three_site_set, bin_size,
+                           bin_dis, min_bin_cnt)
+
+        # 2. generate clusters
+        clu_n, clu_seq_n = gen_clu_seq(clu_mode, min_clu_size, rname, base_dir, site_seq,
+                                       start_site_bin, end_site_bin,
+                                       five_site_bin, three_site_bin)
 
     return clu_n, clu_seq_n
 
 
 def clu_thread(id, bam_bundle_list_n, bam_bundle_list, bam_bundle_rname, bam_bundle_clu_out, gtf_db, clu_mode,
-               min_intron, bin_size, bin_dis, min_bin_cnt, min_clu_size, base_dir):
+               min_intron_len, bin_size, bin_dis, min_bin_cnt, min_clu_size, base_dir):
     global CLU_THREAD_I
     global CLU_THREAD_LK
 
@@ -553,13 +638,14 @@ def clu_thread(id, bam_bundle_list_n, bam_bundle_list, bam_bundle_rname, bam_bun
         bam_bundle = bam_bundle_list[list_i]
         rname = bam_bundle_rname[list_i]
 
-        n, seq_n = clu_by_splice_site_core(gtf_db, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt, min_clu_size,
+        n, seq_n = clu_by_splice_site_core(gtf_db, clu_mode, min_intron_len, bin_size, bin_dis, min_bin_cnt, min_clu_size,
                                            bam_bundle, rname, base_dir)
         bam_bundle_clu_out[list_i] = (n, seq_n)
     return
 
 
-def clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_size, bin_dis, min_bin_cnt, min_clu_size, in_bam, clu_folder,
+def clu_by_splice_site(logfp, gtf, clu_mode, min_intron_len, bin_size, bin_dis, min_bin_cnt, min_clu_size, in_bam,
+                       clu_folder,
                        thread_n):
     global CLU_THREAD_I
     global CLU_THREAD_LK
@@ -622,7 +708,7 @@ def clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_size, bin_dis, min_
 
                 for i in range(thread_n):
                     t = td.Thread(target=clu_thread, args=(i, bam_bundle_list_n, bam_bundle_list, bam_bundle_rname,
-                                                           bam_bundle_clu_out, gtf_db, clu_mode, min_intron, bin_size,
+                                                           bam_bundle_clu_out, gtf_db, clu_mode, min_intron_len, bin_size,
                                                            bin_dis, min_bin_cnt, min_clu_size, base_dir,))
                     threads.append(t)
                     t.start()
@@ -654,7 +740,7 @@ def clu_by_splice_site(logfp, gtf, clu_mode, min_intron, bin_size, bin_dis, min_
 
     for i in range(thread_n):
         t = td.Thread(target=clu_thread, args=(i, bam_bundle_list_n, bam_bundle_list, bam_bundle_rname,
-                                               bam_bundle_clu_out, gtf_db, clu_mode, min_intron, bin_size, bin_dis,
+                                               bam_bundle_clu_out, gtf_db, clu_mode, min_intron_len, bin_size, bin_dis,
                                                min_bin_cnt, min_clu_size, base_dir,))
         threads.append(t)
         t.start()

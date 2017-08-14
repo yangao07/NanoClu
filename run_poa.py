@@ -5,7 +5,7 @@ from os import path
 import utils
 
 
-def poa_thread(logfp, poa_in_n, run_poa_sh, poa, fxtools, in_list, poa_mat):
+def poa_thread(logfp, poa_in_n, run_poa_sh, poa, fxtools, in_list, clu_mode, poa_mat):
     global POA_THREAD_I
     global POA_THREAD_LK
 
@@ -24,13 +24,17 @@ def poa_thread(logfp, poa_in_n, run_poa_sh, poa, fxtools, in_list, poa_mat):
         base_name = poa_in_list[1]
         clu_out = poa_in_list[2]
         clu_out_tmp = poa_in_list[3]
+        if clu_mode == 4 or clu_mode == 5:
+            best = 'best'
+        else:
+            best = 'NObest'
 
-        utils.exec_cmd(logfp, 'run_poa', 'bash %s %s %s %s %s %s %s %s'
-                       % (run_poa_sh, poa, fxtools, clu_in, clu_out_tmp, poa_mat, base_name, clu_out))
+        utils.exec_cmd(logfp, 'run_poa', 'bash %s %s %s %s %s %s %s %s %s'
+                       % (run_poa_sh, poa, fxtools, clu_in, clu_out_tmp, poa_mat, base_name, best, clu_out))
     return
 
 
-def run_poa(logfp, poa, thread_n, clu_folder, cons):
+def run_poa(logfp, poa, thread_n, clu_mode, clu_folder, cons):
     global POA_THREAD_I
     global POA_THREAD_LK
 
@@ -58,7 +62,7 @@ def run_poa(logfp, poa, thread_n, clu_folder, cons):
 
     POA_THREAD_I = 0
     for i in range(thread_n):
-        t = td.Thread(target=poa_thread, args=(logfp, poa_in_n, run_poa_sh, poa, fxtools, poa_in_list, poa_mat,))
+        t = td.Thread(target=poa_thread, args=(logfp, poa_in_n, run_poa_sh, poa, fxtools, poa_in_list, clu_mode, poa_mat,))
         threads.append(t)
         t.start()
     for t in threads:
